@@ -1,1 +1,0 @@
-python3 analyzer.py && Rscript final.R
