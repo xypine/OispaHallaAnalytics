@@ -1,0 +1,5 @@
+/target
+/analyzer/out_*.csv
+/analyzer/__pycache__
+/analyzer_rs/out_*.csv
+/analyzer_rs/__pycache__
