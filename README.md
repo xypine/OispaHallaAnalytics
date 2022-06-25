@@ -1,22 +1,24 @@
 # OispaHallaAnalytics
-## Lataaminen
-Tämä repo käyttää git -submoduuleja, jotka pitää ladata ennen projektin koontia.
 
-Voit ladata ne automaattisesti repon kanssa samaan aikaan käyttämällä komentoa ```git clone --recurse-submodules git@github.com:hallabois/OispaHallaAnalytics.git``` tai suorittamalla komennon ```git submodule update --init --recursive``` aiemmin kloonatussa repossa.
+## Tietokannan luominen
+Asenna [sqlx](https://github.com/launchbadge/sqlx) ja aja seuraavat komennot projektin juurikansiossa:
 
-Submoduulit voi päivittää myöhemmin komennolla ```git submodule update --remote --merge```.
-## Koonti ja suorittaminen
-Käyttää rustia, asenna se aluksi: [https://www.rust-lang.org/tools/install](https://www.rust-lang.org/tools/install)
+```export DATABASE_URL="sqlite:db/analytics.db"``` kertoo sqlx:lle ja OHA:lle missä tietokanta sijaitsee.
+
+```sqlx db create``` luo tietokannan annettuun sijaintiin.
+
+```sqlx migrate run``` luo tietokantaan taulukon "OHA" ja tarvittavat sarakkeet.
+
+Vaihtoehtoisesti kansiossa "db" olevan tiedoston "template.db" voi koittaa kopioida uuteen tiedostoon "analytics.db".
+
+## Kokoaminen ja suorittaminen
 
 Kokoa komennolla ```cargo build --release``` (luo suoritettavan tiedoston target/release/oispa_halla_analytics)
 
 Kokoa & Aja komennolla ```cargo run --release```
-## HTTPS-tuki
-aja palvelin komennolla ```TLS_CERT="/path/to/cert" TLS_KEY="/path/to/key" ./target/release/oispa_halla_analytics```
+### HTTPS-tuki
+aja palvelin komennolla ```TLS_CERT="/etc/letsencrypt/live/hac.hallacoin.ml/fullchain.pem" TLS_KEY="/etc/letsencrypt/live/hac.hallacoin.ml/privkey.pem" ./target/release/oispa_halla_analytics```
 ## API:n Käyttö
 Kts. 
 [swagger (live)](https://hac.oispahalla.com:8002/overwatch)
 [swagger (localhost)](https://localhost:8002/overwatch)
-
-## Datan analysointi
-Kts. [analyzer_rs](analyzer_rs)

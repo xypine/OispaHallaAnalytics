@@ -21,6 +21,17 @@ fn move_to_str(mv: Direction) -> String {
     ;
 }
 
+fn median(array: &Vec<usize>)->f64{
+    if (array.len() % 2)==0 {
+        let ind_left = array.len()/2-1; 
+        let ind_right = array.len()/2 ;
+        (array[ind_left]+array[ind_right]) as f64 / 2.0
+
+    } else {
+            array[(array.len()/2)] as f64
+    }
+}
+
 pub fn analyze_general(data: Vec<Game>, filename: &str) {
     let recordings: Vec<&Recording> = data.iter().map(|i| &i.recording).collect();
     let histories: Vec<&History> = recordings.into_iter().map(|i| &i.history).collect();
@@ -132,7 +143,7 @@ pub fn analyze_first_move_vs_score(data: Vec<Game>, filename: &str) {
                 *val = *val + score;
             },
             None => {
-                sum_scores.insert(move_first, 1);
+                sum_scores.insert(move_first, score);
             },
         }
         moves_first.push(move_first);

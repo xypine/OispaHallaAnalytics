@@ -4,6 +4,9 @@ use poem_openapi::{
     OpenApiService,
 };
 
+pub mod db;
+use db::connect_db;
+
 pub mod api;
 use api::Api;
 
@@ -23,10 +26,12 @@ pub async fn start_server() -> Result<(), std::io::Error>{
     }
     tracing_subscriber::fmt::init();
 
+    let db = connect_db().await;
+
     let cors = Cors::new()
-    .allow_method(Method::GET)
-    .allow_method(Method::POST)
-    .allow_credentials(false);
+        .allow_method(Method::GET)
+        .allow_method(Method::POST)
+        .allow_credentials(false);
 
     let api_service =
         OpenApiService::new(Api::default(), "AnalyticsServer", version)
@@ -54,6 +59,7 @@ pub async fn start_server() -> Result<(), std::io::Error>{
         .nest("/overwatch/openapi.json", spec)
         .nest("/overwatch/api", api_service)
             .with_if(true, cors)
+            .data(db)
         )
         .await
 }

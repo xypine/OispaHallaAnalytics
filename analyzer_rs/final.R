@@ -1,7 +1,8 @@
 Sys.setenv(LANG = "fi")
-w=1024
-h=1024
-resolution=100
+w=2048
+h=2048
+resolution=200
+cat_order = c("Ylös", "Oikealle", "Alas", "Vasemmalle")
 
 message("Starting plotter...")
 # X11()
@@ -32,8 +33,8 @@ plot(data,
 
 png('r_plots/score_distribution.png',width=w,height=h,res=resolution)
 hist(data$score,
-    main="Score distribution",
-    xlab="Score",
+    main="Pisteiden jakauma",
+    xlab="Pisteet",
     col="orange",
     prob = FALSE
 )
@@ -42,8 +43,8 @@ png('r_plots/score_distribution_grouped.png',width=w,height=h,res=resolution)
 group_size = 12
 mx = max(data$score)
 hist(data$score,
-    main=paste("Score distribution (", group_size, " groups)"),
-    xlab="Score",
+    main=paste("Pisteiden jakauma (", group_size, " väliä)"),
+    xlab="Pisteet",
     breaks=seq(0,mx,mx/group_size),
     xaxp=c(0,mx,group_size),
     col=rainbow(group_size),
@@ -54,18 +55,18 @@ hist(data$score,
 png('r_plots/score_over_time.png',width=w,height=h,res=resolution)
 time <- anytime(order(data$time/1000))
 plot(x = time, y = data$score,
-    main="score over time",
-    xlab="time",
-    ylab="score"
+    main="Pisteet vs Aika",
+    xlab="Aika",
+    ylab="Pisteet"
 )
 abline(lm(data$score ~ time), col = "blue", lwd = 2)
 # lines(x = order(data_with_time$time), y = data_with_time$score, type="b")
 
 png('r_plots/length_vs_score.png',width=w,height=h,res=resolution)
 plot(data$game_length, data$score,
-    main="Score vs n. moves",
-    ylab="Score",
-    xlab="Number of moves"
+    main="Siirtojen määrä vs Pisteet",
+    ylab="Pisteet",
+    xlab="Siirtojen määrä"
 )
 abline(lm(data$score ~ data$game_length), col = "blue", lwd = 2)
 
@@ -84,17 +85,26 @@ barplot(
 )
 
 png('r_plots/first_move_distribution.png',width=w,height=h,res=resolution)
-plot(factor(data$move_first),
+jakauma_tiedot <- as.data.frame(table(data$move_first) / nrow(data))
+jakauma_tiedot <- jakauma_tiedot[order(factor(jakauma_tiedot$Var1, levels = cat_order)),]
+head(jakauma_tiedot)
+eka_jakauma <- factor(data$move_first,
+    levels=cat_order
+)
+barplot(
+    names=data_move_distr$Suunta,
+    height=jakauma_tiedot$Freq,
     main="Ensimmäisen siirron jakauma",
     xlab="Ensimmäinen siirto",
     col=rainbow(4)
 )
 
-png('r_plots/first_move_vs_score.png',width=w,height=h,res=resolution)
-plot(factor(data$move_first), data$score,
+png('r_plots/first_move_vs_score.png',width=w*2,height=h,res=resolution)
+plot(eka_jakauma, data$score,
     main="Ensimmäinen siirto vs pisteet",
     ylab="Pisteet",
     xlab="Ensimmäinen siirto",
+    ylim=c(0,20000),
     col=rainbow(4)
 )
 
@@ -108,7 +118,7 @@ names(df) <- c('Ensimmäinen siirto', 'Pisteiden keskiarvo')
 grid.table(df)
 
 png('r_plots/last_move_distribution.png',width=w,height=h,res=resolution)
-plot(factor(data$move_last),
+plot(factor(data$move_last, levels=cat_order),
     main="Viimeisen siirron jakauma",
     xlab="Viimeinen siirto",
     col=rainbow(4)
@@ -116,7 +126,7 @@ plot(factor(data$move_last),
 
 png('r_plots/last_move_vs_score.png',width=w,height=h,res=resolution)
 plot(factor(data$move_last), data$score,
-    main="Viimeinen siirto vs pistet",
+    main="Viimeinen siirto vs pisteet",
     ylab="Pisteet",
     xlab="Viimeinen siirto",
     col=rainbow(4)
@@ -170,9 +180,9 @@ levels(days_ordered)[levels(days_ordered)=="sunnuntai"] <- "SU"
 plot(
     days_ordered,
     data$score,
-    main="Day of the week vs score",
-    xlab="Day of the week",
-    ylab="Score",
+    main="Viikonpäivä vs Pisteet",
+    xlab="Viikonpäivä",
+    ylab="Pisteet",
     col=rainbow(7),
 )
 
@@ -215,10 +225,24 @@ png('r_plots/cover2.png',width=w,height=h,res=resolution)
 # Create a, b, c, d variables
 b <- c('kaikki pelit', 'ei-hylätyt', 'hylätyt')
 d <- c(mean(data$score), mean(data_completed$score), mean(data_abandoned$score))
-e <- c(mean(data$game_length), mean(data_completed$game_length), mean(data_abandoned$game_length))
+f <- c(median(data$score), median(data_completed$score), median(data_abandoned$score))
+# Laske moodi tämän postauksen mukaan: https://stackoverflow.com/a/2547551
+g <- c(names(sort(-table(data$score)))[1], names(sort(-table(data_completed$score)))[1], names(sort(-table(data_abandoned$score)))[1])
 # Join the variables to create a data frame
-df <- data.frame(b,d,e)
-names(df) <- c('', 'pisteiden keskiarvo', 'pelin pituuden keskiarvo')
+df <- data.frame(b,d,f,g)
+names(df) <- c('', 'pisteiden keskiarvo', 'pisteiden mediaani', 'pisteiden moodi')
+grid.table(df)
+
+message("Rendering cover slide 3...")
+png('r_plots/cover3.png',width=w,height=h,res=resolution)
+# Create a, b, c, d variables
+b <- c('kaikki pelit', 'ei-hylätyt', 'hylätyt')
+d <- c(mean(data$game_length), mean(data_completed$game_length), mean(data_abandoned$game_length))
+f <- c(median(data$game_length), median(data_completed$game_length), median(data_abandoned$game_length))
+g <- c(names(sort(-table(data$game_length)))[1], names(sort(-table(data_completed$game_length)))[1], names(sort(-table(data_abandoned$game_length)))[1])
+# Join the variables to create a data frame
+df <- data.frame(b,d,f,g)
+names(df) <- c('', 'pelin pituuden keskiarvo', 'pelin pituuden mediaani', 'pelin pituuden moodi')
 grid.table(df)
 
 message("Kaikki valmista!")

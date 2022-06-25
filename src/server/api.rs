@@ -1,7 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tokio::sync::Mutex;
 use poem_openapi::{Tags, OpenApi, payload::Json};
+use poem::web::Data;
+
+use super::db::DbPool;
 
 use twothousand_forty_eight::validator::{validate_first_move, validate_history};
 use twothousand_forty_eight::parser::parse_data;
@@ -24,10 +26,7 @@ enum ApiTags {
 }
 
 #[derive(Default)]
-pub struct Api {
-    data: Mutex<Vec<Game>>,
-    hashes: Mutex<Vec<String>>
-}
+pub struct Api;
 
 #[OpenApi]
 impl Api {
@@ -38,10 +37,10 @@ impl Api {
     }
     /// Get information about the data gathered by the server
     #[oai(path = "/stats", method = "get", tag = "ApiTags::Meta")]
-    async fn stats(&self) -> StatsResponse {
+    async fn stats(&self, pool: Data<&DbPool>) -> StatsResponse {
         StatsResponse::Ok(
             Json(Stats{
-                recorded_games: self.data.lock().await.len()
+                recorded_games: sqlx::query!("SELECT COUNT(*) as count from OHA").fetch_one(pool.0).await.unwrap().count as usize
             })
         )
     }
@@ -64,32 +63,38 @@ impl Api {
     
     /// Record a played game
     #[oai(path = "/record", method = "post", tag = "ApiTags::Analytics")]
-    async fn record(&self, input: Json<RecordInput>) -> RecordResponse {
-        let result = self.parse_and_validate(input.r.clone()).await;
+    async fn record(&self, pool: Data<&DbPool>, input: Json<RecordInput>) -> RecordResponse {
+        let run = input.r.clone();
+        let result = self.parse_and_validate(run.clone()).await;
         match result {
             None => RecordResponse::Malformed,
             Some( recording ) => {
-                let mut data = self.data.lock().await;
-                let mut hashes = self.hashes.lock().await;
                 let hash = recording.hash_v1();
-                if hashes.contains(&hash) {
+                if sqlx::query!("SELECT id from OHA where hash = ?", hash).fetch_optional(pool.0).await.unwrap().is_some() {
                     RecordResponse::AlreadyExists
                 }
                 else {
-                    let (_valid, computed_score, computed_socre_margin, _breaks) = validate_history(recording.clone());
-                    data.push(
-                        Game {
-                            recording,
-                            won: input.won,
-                            abandoned: Some(input.abandoned),
-                            score: input.score,
-                            computed_score,
-                            computed_socre_margin,
-                            timestamp_ms: SystemTime::now().duration_since(UNIX_EPOCH).expect("Time is going backwards!").as_millis() as usize
-
-                        }
-                    );
-                    hashes.push(hash);
+                    let (valid, computed_score, computed_score_margin, _breaks) = validate_history(recording.clone());
+                    if !valid {
+                        return RecordResponse::Malformed;
+                    }
+                    let _parsed = ParsedGame {
+                        recording,
+                        won: input.won.clone(),
+                        abandoned: input.abandoned.clone(),
+                        score: input.score,
+                        computed_score,
+                        computed_score_margin,
+                        timestamp_ms: SystemTime::now().duration_since(UNIX_EPOCH).expect("Time is going backwards!").as_millis() as usize
+                    };
+                    sqlx::query!(
+                        r#"
+                            INSERT INTO OHA(data_raw, hash) 
+                            VALUES (?1, ?2)
+                        "#,
+                        run,
+                        hash,
+                    ).execute(pool.0).await.unwrap();
                     RecordResponse::Ok
                 }
             },
@@ -134,12 +139,18 @@ impl Api {
 
     /// Get recorded games
     #[oai(path = "/data", method = "get", tag = "ApiTags::Analytics")]
-    async fn get_data(&self) -> GetDataResponse {
-        let data = self.data.lock().await;
+    async fn get_data(&self, pool: Data<&DbPool>) -> GetDataResponse {
+        let data = sqlx::query!("SELECT id, data_raw, hash from OHA").fetch_all(pool.0).await.unwrap();
         GetDataResponse::Ok(
             Json(
-                Data {
-                    data: data.iter().map(|r| serde_json::json!(r)).collect()
+                DataWrapper {
+                    data: data.iter().map(|r| serde_json::json!(
+                        Game {
+                            id: r.id,
+                            data_raw: r.data_raw.clone(),
+                            hash: r.hash.clone()
+                        }
+                    )).collect()
                 }
             )
         )

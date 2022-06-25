@@ -50,7 +50,7 @@ pub enum RecordResponse {
 }
 
 #[derive(Debug, Clone, Object)]
-pub struct Data {
+pub struct DataWrapper {
     pub data: Vec<serde_json::Value>
 }
 
@@ -58,5 +58,5 @@ pub struct Data {
 pub enum GetDataResponse {
     /// Return requested games
     #[oai(status = 200)]
-    Ok(Json<Data>),
+    Ok(Json<DataWrapper>),
 }
