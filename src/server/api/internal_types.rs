@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use twothousand_forty_eight::recording::Recording;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
@@ -9,7 +9,7 @@ pub struct ParsedGame {
     pub score: usize,
     pub computed_score: usize,
     pub computed_score_margin: usize,
-    pub timestamp_ms: usize
+    pub timestamp_ms: usize,
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
@@ -17,5 +17,6 @@ pub struct Game {
     pub id: i64,
     pub data_raw: String,
     // pub data_parsed: String,
-    pub hash: String
+    pub hash: String,
+    pub client: Option<String>,
 }

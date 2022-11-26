@@ -1,0 +1,36 @@
+# fly.toml file generated for oha on 2022-11-21T08:46:25+02:00
+
+app = "oha"
+kill_signal = "SIGINT"
+kill_timeout = 5
+processes = []
+
+[env]
+  HTTP_BIND="0.0.0.0:8080"
+
+[experimental]
+  allowed_public_ports = []
+  auto_rollback = true
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+  [services.concurrency]
+    hard_limit = 25
+    soft_limit = 20
+    type = "connections"
+
+  [[services.ports]]
+    force_https = true
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+  [[services.tcp_checks]]
+    grace_period = "1s"
+    interval = "15s"
+    restart_limit = 0
+    timeout = "2s"

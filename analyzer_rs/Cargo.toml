@@ -10,5 +10,5 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 array_tool = "1.0"
 csv = "1.1"
-twothousand-forty-eight = { path = "../twothousand-forty-eight", default_features = false, features = ["tile_id", "serde_derive"] }
+twothousand-forty-eight = { version="0.16.1" }
 oispa_halla_analytics = { path = ".." }

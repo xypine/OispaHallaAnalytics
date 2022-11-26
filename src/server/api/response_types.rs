@@ -1,7 +1,4 @@
-use poem_openapi::{
-    payload::Json,
-    ApiResponse, Object,
-};
+use poem_openapi::{payload::Json, ApiResponse, Object};
 
 #[derive(ApiResponse)]
 pub enum AliveResponse {
@@ -44,6 +41,10 @@ pub enum RecordResponse {
     #[oai(status = 400)]
     Malformed,
 
+    /// Validating the game failed
+    #[oai(status = 418)]
+    InvalidGame,
+
     /// The run already exists
     #[oai(status = 409)]
     AlreadyExists,
@@ -51,7 +52,7 @@ pub enum RecordResponse {
 
 #[derive(Debug, Clone, Object)]
 pub struct DataWrapper {
-    pub data: Vec<serde_json::Value>
+    pub data: Vec<serde_json::Value>,
 }
 
 #[derive(ApiResponse)]
