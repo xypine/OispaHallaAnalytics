@@ -26,15 +26,20 @@ pub async fn start_server(https: bool) -> Result<(), std::io::Error> {
 
     let db = connect_db().await;
 
+    sqlx::migrate!("./migrations")
+        .run(&db)
+        .await
+        .expect("Failed to run migrations");
+
     let cors = Cors::new()
         .allow_method(Method::GET)
         .allow_method(Method::POST)
         .allow_credentials(false);
 
     let api_service = OpenApiService::new(Api::default(), "AnalyticsServer", version)
-        .server("https://localhost/api")
         .server("http://localhost/api")
-        .server("https://hac.oispahalla.com/api");
+        .server("https://localhost/api")
+        .server("https://analytics.oispahalla.com/api");
     let ui = api_service.swagger_ui();
     let spec = api_service.spec_endpoint();
 

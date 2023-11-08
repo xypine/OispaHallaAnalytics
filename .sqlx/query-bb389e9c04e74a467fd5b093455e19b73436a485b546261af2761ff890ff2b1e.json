@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                            INSERT INTO OHA(data_raw, client, hash, created_at) \n                            VALUES ($1, $2, $3, $4)\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bb389e9c04e74a467fd5b093455e19b73436a485b546261af2761ff890ff2b1e"
+}

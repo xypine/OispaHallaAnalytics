@@ -4,6 +4,11 @@ h=2048
 resolution=200
 cat_order = c("Ylös", "Oikealle", "Alas", "Vasemmalle")
 
+message("Connecting to database...")
+library(RSQLite)
+library(DBI)
+db <- dbConnect(RSQLite::SQLite(), dbname="db/anal.db")
+
 message("Starting plotter...")
 # X11()
 library(anytime)
@@ -28,6 +33,13 @@ plot(data,
 # hist(factor(data$won),
 #     main="Score distribution"
 # )
+png('r_plots/length_distribution.png',width=w,height=h,res=resolution)
+hist(data$game_length,
+    main="Pelin pituuden jakauma",
+    xlab="Pelin pituus",
+    col="orange",
+    prob = FALSE
+)
 
 png('r_plots/score_distribution.png',width=w,height=h,res=resolution)
 hist(data$score,

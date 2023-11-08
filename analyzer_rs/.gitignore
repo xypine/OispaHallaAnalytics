@@ -1,1 +1,5 @@
 /target
+# Ignore out_all.csv and out_composite.txt and out_frequency_moves.csv
+/out_*.*
+/history.txt
+/db

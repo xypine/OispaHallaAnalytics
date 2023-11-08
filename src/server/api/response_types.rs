@@ -21,6 +21,16 @@ pub enum GetConfigResponse {
     Ok(Json<ServerConfig>),
 }
 
+#[derive(ApiResponse)]
+pub enum WipeResponse {
+    /// Returns when get_config is requested.
+    #[oai(status = 200)]
+    Ok,
+
+    #[oai(status = 401)]
+    Unauthorized,
+}
+
 #[derive(Debug, Clone, Object)]
 pub struct Stats {
     pub recorded_games: usize,
@@ -37,12 +47,8 @@ pub enum RecordResponse {
     #[oai(status = 200)]
     Ok,
 
-    /// Parsing the data failed
-    #[oai(status = 400)]
-    Malformed,
-
     /// Validating the game failed
-    #[oai(status = 418)]
+    #[oai(status = 400)]
     InvalidGame,
 
     /// The run already exists
@@ -51,13 +57,16 @@ pub enum RecordResponse {
 }
 
 #[derive(Debug, Clone, Object)]
-pub struct DataWrapper {
-    pub data: Vec<serde_json::Value>,
+pub struct Game {
+    pub data_raw: String,
+    pub hash: String,
+    pub client: Option<String>,
+    pub created_at: i64,
 }
 
 #[derive(ApiResponse)]
 pub enum GetDataResponse {
     /// Return requested games
     #[oai(status = 200)]
-    Ok(Json<DataWrapper>),
+    Ok(Json<Vec<Game>>),
 }

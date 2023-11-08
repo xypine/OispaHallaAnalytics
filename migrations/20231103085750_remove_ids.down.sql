@@ -1,0 +1,8 @@
+-- Add down migration script here
+-- undo the following migration:
+-- ALTER TABLE OHA DROP CONSTRAINT IF EXISTS oha_pkey;
+-- ALTER TABLE OHA ADD PRIMARY KEY (hash);
+-- ALTER TABLE OHA DROP COLUMN id;
+
+ALTER TABLE OHA DROP CONSTRAINT IF EXISTS oha_pkey;
+ALTER TABLE OHA ADD COLUMN id UUID PRIMARY KEY NOT NULL DEFAULT gen_random_uuid();

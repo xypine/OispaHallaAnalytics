@@ -1,19 +1,16 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use poem::web::Data;
-use poem_openapi::{payload::Json, OpenApi, Tags};
+use poem_openapi::{param::Query, payload::Json, OpenApi, Tags};
 
 use super::db::DbPool;
 
-use twothousand_forty_eight::parser::parse_data;
-use twothousand_forty_eight::recording::Recording;
-use twothousand_forty_eight::validator::{validate_first_move, validate_history, ValidationData};
+use twothousand_forty_eight::unified::{hash, validate};
 
 pub mod input_types;
 pub mod internal_types;
 pub mod response_types;
 use input_types::*;
-use internal_types::*;
 use response_types::*;
 
 #[derive(Tags)]
@@ -42,7 +39,8 @@ impl Api {
                 .fetch_one(pool.0)
                 .await
                 .unwrap()
-                .count as usize,
+                .count
+                .unwrap_or_default() as usize,
         }))
     }
     /// Get information about the server
@@ -60,121 +58,97 @@ impl Api {
         }))
     }
 
+    #[oai(path = "/wipe", method = "post", tag = "ApiTags::Analytics")]
+    async fn wipe(&self, pool: Data<&DbPool>, input: Json<WipeInput>) -> WipeResponse {
+        let wipe_key = match std::env::var("WIPE_KEY") {
+            Ok(v) => v,
+            Err(_) => {
+                println!("Attempted wipe with no key set");
+                return WipeResponse::Unauthorized;
+            }
+        };
+        if input.key != wipe_key {
+            println!("Attempted wipe with invalid key: {}", input.key);
+            return WipeResponse::Unauthorized;
+        }
+        sqlx::query!("DELETE FROM OHA")
+            .execute(pool.0)
+            .await
+            .unwrap();
+        WipeResponse::Ok
+    }
+
     /// Record a played game
     #[oai(path = "/record", method = "post", tag = "ApiTags::Analytics")]
     async fn record(&self, pool: Data<&DbPool>, input: Json<RecordInput>) -> RecordResponse {
         let run = input.r.clone();
         let client = input.client.clone();
-        let result = self.parse_and_validate(run.clone()).await;
-        match result {
-            None => RecordResponse::Malformed,
-            Some(recording) => {
-                let hash = recording.hash_v1();
-                if sqlx::query!("SELECT id from OHA where hash = ?", hash)
-                    .fetch_optional(pool.0)
-                    .await
-                    .unwrap()
-                    .is_some()
-                {
-                    RecordResponse::AlreadyExists
-                } else {
-                    let validation_result = validate_history(recording.clone());
-                    if !validation_result.is_ok() {
-                        return RecordResponse::InvalidGame;
-                    }
-                    let ValidationData {
-                        valid,
-                        score,
-                        score_margin,
-                        ..
-                    } = validation_result.unwrap();
-                    if !valid {
-                        return RecordResponse::Malformed;
-                    }
-                    let _parsed = ParsedGame {
-                        recording,
-                        won: input.won.clone(),
-                        abandoned: input.abandoned.clone(),
-                        score: input.score,
-                        computed_score: score,
-                        computed_score_margin: score_margin,
-                        timestamp_ms: SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .expect("Time is going backwards!")
-                            .as_millis() as usize,
-                    };
-                    sqlx::query!(
-                        r#"
-                            INSERT INTO OHA(data_raw, client, hash) 
-                            VALUES (?1, ?2, ?3)
-                        "#,
-                        run,
-                        client,
-                        hash,
-                    )
-                    .execute(pool.0)
-                    .await
-                    .unwrap();
-                    RecordResponse::Ok
-                }
+        let hash = hash(&run);
+        if !hash.is_ok() {
+            return RecordResponse::InvalidGame;
+        }
+        let hash = hash.unwrap();
+        if sqlx::query!("SELECT hash from OHA where hash = $1", hash)
+            .fetch_optional(pool.0)
+            .await
+            .unwrap()
+            .is_some()
+        {
+            RecordResponse::AlreadyExists
+        } else {
+            let validation_result = validate(&run);
+            if !validation_result.is_ok() {
+                return RecordResponse::InvalidGame;
             }
+            let created_at = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as i64;
+            sqlx::query!(
+                r#"
+                            INSERT INTO OHA(data_raw, client, hash, created_at) 
+                            VALUES ($1, $2, $3, $4)
+                        "#,
+                run,
+                client,
+                hash,
+                created_at
+            )
+            .execute(pool.0)
+            .await
+            .unwrap();
+            RecordResponse::Ok
         }
-    }
-
-    async fn parse_and_validate(&self, run: String) -> Option<Recording> {
-        let recording = parse_data(run.clone()).ok()?;
-        if self.validate(&recording).await {
-            return Some(recording);
-        }
-        None
-    }
-
-    async fn validate(&self, history: &Recording) -> bool {
-        let length = history.history.len();
-        println!("Loaded record with the length of {}.", length);
-        let hash = history.hash_v1();
-        let w = history.width;
-        let h = history.height;
-        let result0 = validate_first_move(&history);
-        let Ok(ValidationData {
-            valid,
-            score,
-            score_end: _,
-            score_margin: _,
-            breaks,
-            break_positions: _,
-        }) = validate_history(history.clone()) else {
-            return false;
-        };
-        let valid = result0 && valid;
-        println!("Run <{}>", hash);
-        println!("\tBoard size: {}x{}", w, h);
-        println!("\tRun score: {}", score);
-        println!("\tBreaks used: {}", breaks);
-        println!("\tValid: {}", valid);
-
-        true
     }
 
     /// Get recorded games
     #[oai(path = "/data", method = "get", tag = "ApiTags::Analytics")]
-    async fn get_data(&self, pool: Data<&DbPool>) -> GetDataResponse {
-        let data = sqlx::query!("SELECT * from OHA")
-            .fetch_all(pool.0)
-            .await
-            .unwrap();
-        GetDataResponse::Ok(Json(DataWrapper {
-            data: data
-                .iter()
-                .map(|r| {
-                    serde_json::json!(Game {
-                        id: r.id,
-                        client: r.client.clone(),
-                        data_raw: r.data_raw.clone(),
-                        hash: r.hash.clone()
-                    })
+    async fn get_data(
+        &self,
+        pool: Data<&DbPool>,
+        page: Query<Option<i64>>,
+        page_size: Query<Option<i64>>,
+    ) -> GetDataResponse {
+        let page = page.unwrap_or(0);
+        let page_size = page_size.unwrap_or(i64::MAX);
+        let page_offset = page * page_size;
+        let data = sqlx::query!(
+            "SELECT * from OHA ORDER BY created_at DESC OFFSET $1 LIMIT $2",
+            page_offset,
+            page_size
+        )
+        .fetch_all(pool.0)
+        .await
+        .expect("Failed to fetch data");
+        GetDataResponse::Ok(Json(
+            data.iter()
+                .map(|r| response_types::Game {
+                    client: Some(r.client.clone()),
+                    data_raw: r.data_raw.clone(),
+                    hash: r.hash.clone(),
+                    created_at: r.created_at,
                 })
                 .collect(),
-        }))
+        ))
     }
 }

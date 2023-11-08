@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM OHA",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "e2c78b0f6c5ec7ca53fd019992b54a4f26afd9cd971c63c20c50c61cb42678b5"
+}

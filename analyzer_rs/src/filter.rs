@@ -1,5 +1,27 @@
-use oispa_halla_analytics::server::api::internal_types::Game;
+use crate::Game;
+use rayon::prelude::*;
+
+use crate::{io, libproxy::reconstruct_history};
 
 pub fn filter(data: Vec<Game>, allow_abandoned: bool, only_abandoned: bool) -> Vec<Game> {
-    return data.into_iter().filter(|i| true).collect();
+    /*
+    data.par_iter()
+        .filter(|g| reconstruct_history(g.data_raw.clone()).is_ok())
+        .cloned()
+        .collect::<Vec<_>>()
+        */
+    data
+}
+
+pub fn get_filtered_data() -> Vec<Game> {
+    println!("Loading games...");
+    let raw_data = io::load_folder("./data");
+    println!("De-duplicating games...");
+    let mut data = io::merge_data(raw_data).data;
+    println!("Found {} games...", data.len());
+    println!("Filtering data...");
+    data = filter(data, true, false);
+    println!("Filtered to {} games...", data.len());
+    println!();
+    data
 }

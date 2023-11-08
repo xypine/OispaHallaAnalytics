@@ -13,7 +13,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 
 # Copy the rest
 COPY . .
-RUN chmod a+rwx db/template.db
+#RUN chmod a+rwx db/template.db
 # Build (install) the actual binaries
 RUN cargo install --path .
 
@@ -42,8 +42,8 @@ RUN chmod a+rwx -R /app/data
 COPY --from=builder /usr/local/cargo/bin/oispa_halla_analytics /app/oispa_halla_analytics
 
 # Reset db url for actually running the server
-ENV DATABASE_URL="sqlite:/app/data/analytics.db"
-COPY --from=builder /usr/src/app/db/template.db /app/data/analytics.db
+#ENV DATABASE_URL="sqlite:/app/data/analytics.db"
+#COPY --from=builder /usr/src/app/db/template.db /app/data/analytics.db
 # RUN cp -n -r /app/data /data
 
 # Run without tls
