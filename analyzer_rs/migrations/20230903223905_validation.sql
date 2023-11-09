@@ -5,5 +5,6 @@ CREATE TABLE IF NOT EXISTS validations
     score       INTEGER             NOT NULL,
     score_end   INTEGER             NOT NULL,
     score_margin INTEGER            NOT NULL,
-    breaks      INTEGER             NOT NULL
+    breaks      INTEGER             NOT NULL,
+    length      INTEGER             NOT NULL
 );

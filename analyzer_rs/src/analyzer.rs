@@ -331,6 +331,7 @@ pub async fn unpack_games(pool: SqlitePool) {
                 validation.score_end as i64,
                 validation.score_margin as i64,
                 validation.breaks as i64,
+                moves.len() as i64,
             )
             .await;
             //println!("\tSaving {} moves to database...", moves.len());
@@ -362,14 +363,16 @@ async fn save_validation(
     score_end: i64,
     score_margin: i64,
     breaks: i64,
+    length: i64,
 ) {
     sqlx::query!(
-        "INSERT INTO validations (game_hash, score, score_end, score_margin, breaks) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
+        "INSERT INTO validations (game_hash, score, score_end, score_margin, breaks, length) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
         game_hash,
         score,
         score_end,
         score_margin,
-        breaks
+        breaks,
+        length
     )
     .execute(pool)
     .await

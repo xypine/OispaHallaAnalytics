@@ -14,13 +14,26 @@ message("Starting plotter...")
 library(anytime)
 library(gridExtra)
 
+
 message("Loading data...")
-data <- read.csv("out_all.csv")
-data_move_distr <- read.csv("out_frequency_moves.csv")
-data_move_distr <- data_move_distr[-nrow(data_move_distr),]
-data_move_score <- read.csv("out_first_move_vs_score.csv")
-# data_moves <- read.csv("out_moves.csv")
-# data_moves_flat <- read.csv("out_moves_flat.csv")
+games <- dbGetQuery(db, "SELECT \"client\", \"hash\", \"created_at\" FROM games")
+message("Games loaded!")
+validations <- dbGetQuery(db, "SELECT \"game_hash\", \"score\", \"score_end\", \"score_margin\", \"breaks\", \"length\" FROM validations")
+message("Validations loaded!")
+moves <- dbGetQuery(db, "SELECT \"game_hash\", \"move_index\", \"direction\" FROM moves")
+message("Moves loaded!")
+
+
+# combine games and validations
+data <- merge(games, validations, by.x="hash", by.y="game_hash")
+message("Games combined!")
+game_moves <- merge(games, moves, by.x="hash", by.y="game_hash")
+message("Moves combined!")
+first_moves  <- aggregate(direction ~ hash, game_moves, head, 0)
+message("First moves aggregated!")
+last_moves <- aggregate(direction ~ hash, game_moves, tail, 0)
+message("Last moves aggregated!")
+
 message("Data loaded!")
 message("Plotting...")
 
@@ -29,12 +42,13 @@ plot(data,
     main="All data"
 )
 
+
 # png('r_plots/winrate.png',width=w,height=h,res=resolution)
 # hist(factor(data$won),
 #     main="Score distribution"
 # )
 png('r_plots/length_distribution.png',width=w,height=h,res=resolution)
-hist(data$game_length,
+hist(data$length,
     main="Pelin pituuden jakauma",
     xlab="Pelin pituus",
     col="orange",
@@ -73,34 +87,31 @@ abline(lm(data$score ~ client), col = "blue", lwd = 2)
 # lines(x = order(data_with_time$time), y = data_with_time$score, type="b")
 
 png('r_plots/length_vs_score.png',width=w,height=h,res=resolution)
-plot(data$game_length, data$score,
+plot(data$length, data$score,
     main="Siirtojen määrä vs Pisteet",
     ylab="Pisteet",
     xlab="Siirtojen määrä"
 )
-abline(lm(data$score ~ data$game_length), col = "blue", lwd = 2)
+abline(lm(data$score ~ data$length), col = "blue", lwd = 2)
 
-# png('r_plots/move_distribution.png',width=w,height=h,res=resolution)
-# plot(factor(data_moves_flat$move),
-#     main="General move distribution",
-#     xlab="Move played"
-# )
+
+# Get the distribution of moves in each direction
+data_move_distr <- as.data.frame(table(game_moves$direction) / nrow(game_moves))
 
 png('r_plots/general_move_distribution.png',width=w,height=h,res=resolution)
 barplot(
+    names=data_move_distr$Var1,
+    height=data_move_distr$Freq,
     main="Siirtojen yleinen jakauma",
-    height=data_move_distr$f_per,
-    names=data_move_distr$Suunta,
+    xlab="Siirto",
     col=rainbow(4)
 )
 
 png('r_plots/first_move_distribution.png',width=w,height=h,res=resolution)
-jakauma_tiedot <- as.data.frame(table(data$move_first) / nrow(data))
+jakauma_tiedot <- as.data.frame(table(first_moves$direction) / nrow(first_moves))
 jakauma_tiedot <- jakauma_tiedot[order(factor(jakauma_tiedot$Var1, levels = cat_order)),]
 head(jakauma_tiedot)
-eka_jakauma <- factor(data$move_first,
-    levels=cat_order
-)
+eka_jakauma <- factor(first_moves$direction, levels = cat_order)
 barplot(
     names=data_move_distr$Suunta,
     height=jakauma_tiedot$Freq,
