@@ -1,16 +1,15 @@
 Sys.setenv(LANG = "fi")
-w=2048
-h=2048
-resolution=200
-cat_order = c("Ylös", "Oikealle", "Alas", "Vasemmalle")
+w <- 4096
+h <- 4096
+resolution <- 200
+cat_order <- c("Ylös", "Oikealle", "Alas", "Vasemmalle")
 
 message("Connecting to database...")
 library(RSQLite)
 library(DBI)
-db <- dbConnect(RSQLite::SQLite(), dbname="db/anal.db")
+db <- dbConnect(RSQLite::SQLite(), dbname = "db/anal.db")
 
 message("Starting plotter...")
-# X11()
 library(anytime)
 library(gridExtra)
 
@@ -21,249 +20,267 @@ message("Games loaded!")
 validations <- dbGetQuery(db, "SELECT \"game_hash\", \"score\", \"score_end\", \"score_margin\", \"breaks\", \"length\" FROM validations")
 message("Validations loaded!")
 moves <- dbGetQuery(db, "SELECT \"game_hash\", \"move_index\", \"direction\" FROM moves")
+# Filter out the 4th direction
+actual_moves <- moves[moves$direction != 4, ]
 message("Moves loaded!")
 
 
 # combine games and validations
-data <- merge(games, validations, by.x="hash", by.y="game_hash")
+data <- merge(games, validations, by.x = "hash", by.y = "game_hash")
 message("Games combined!")
-game_moves <- merge(games, moves, by.x="hash", by.y="game_hash")
-message("Moves combined!")
-first_moves  <- aggregate(direction ~ hash, game_moves, head, 0)
+
+# Filter for the first moves
+first_moves <- moves[moves$move_index == 0, ]
+# Select only the game_hash and direction columns
+first_moves <- first_moves[, c("game_hash", "direction")]
 message("First moves aggregated!")
-last_moves <- aggregate(direction ~ hash, game_moves, tail, 0)
+
+merged_moves_validations <- merge(moves, validations, by.x = "game_hash", by.y = "game_hash")
+
+# Calculate the index of the last move
+merged_moves_validations$last_move_index <- merged_moves_validations$length - 1
+
+# Function to get the appropriate last move
+get_appropriate_last_move <- function(data) {
+    # Filter for the last move
+    last_move <- data[data$move_index == data$last_move_index, ]
+
+    # Check if the direction of the last move is 4
+    if (last_move$direction == 4) {
+        # If so, take the second last move
+        second_last_index <- data$last_move_index - 1
+        return(data[data$move_index == second_last_index, ])
+    } else {
+        # Otherwise, take the last move
+        return(last_move)
+    }
+}
+
+# Apply the function to each group of game
+last_moves <- do.call(rbind, lapply(split(merged_moves_validations, merged_moves_validations$game_hash), get_appropriate_last_move))
+
+# Select only the game_hash and direction columns
+last_moves <- last_moves[, c("game_hash", "direction")]
+last_moves$direction[last_moves$direction == 4] <- NA # or another value
 message("Last moves aggregated!")
 
 message("Data loaded!")
 message("Plotting...")
 
-png('r_plots/data_all.png',width=w,height=h,res=resolution)
-plot(data,
-    main="All data"
-)
+# png("r_plots/data_all.png", width = w, height = h, res = resolution)
+# plot(data,
+#    main = "All data"
+# )
+# message("data_all.png rendered!")
 
 
 # png('r_plots/winrate.png',width=w,height=h,res=resolution)
 # hist(factor(data$won),
 #     main="Score distribution"
 # )
-png('r_plots/length_distribution.png',width=w,height=h,res=resolution)
+png("r_plots/length_distribution.png", width = w, height = h, res = resolution)
 hist(data$length,
-    main="Pelin pituuden jakauma",
-    xlab="Pelin pituus",
-    col="orange",
+    main = "Pelin pituuden jakauma",
+    xlab = "Pelin pituus",
+    col = "orange",
     prob = FALSE
 )
+message("length_distribution.png rendered!")
 
-png('r_plots/score_distribution.png',width=w,height=h,res=resolution)
+png("r_plots/score_distribution.png", width = w, height = h, res = resolution)
 hist(data$score,
-    main="Pisteiden jakauma",
-    xlab="Pisteet",
-    col="orange",
+    main = "Pisteiden jakauma",
+    xlab = "Pisteet",
+    col = "orange",
     prob = FALSE
 )
+message("score_distribution.png rendered!")
 
-png('r_plots/score_distribution_grouped.png',width=w,height=h,res=resolution)
-group_size = 12
-mx = max(data$score)
+png("r_plots/score_distribution_grouped.png", width = w, height = h, res = resolution)
+group_size <- 12
+mx <- max(data$score)
 hist(data$score,
-    main=paste("Pisteiden jakauma (", group_size, " väliä)"),
-    xlab="Pisteet",
-    breaks=seq(0,mx,mx/group_size),
-    xaxp=c(0,mx,group_size),
-    col=rainbow(group_size),
+    main = paste("Pisteiden jakauma (", group_size, " väliä)"),
+    xlab = "Pisteet",
+    breaks = seq(0, mx, mx / group_size),
+    xaxp = c(0, mx, group_size),
+    col = rainbow(group_size),
     prob = FALSE
 )
+message("score_distribution_grouped.png rendered!")
 
 
-png('r_plots/score_over_time.png',width=w,height=h,res=resolution)
+png("r_plots/score_over_time.png", width = w, height = h, res = resolution)
 client <- order(data$client)
-plot(x = client, y = data$score,
-    main="Pisteet vs Aika",
-    xlab="Aika",
-    ylab="Pisteet"
+plot(
+    x = client, y = data$score,
+    main = "Pisteet vs Aika",
+    xlab = "Aika",
+    ylab = "Pisteet"
 )
 abline(lm(data$score ~ client), col = "blue", lwd = 2)
 # lines(x = order(data_with_time$time), y = data_with_time$score, type="b")
+message("score_over_time.png rendered!")
 
-png('r_plots/length_vs_score.png',width=w,height=h,res=resolution)
+png("r_plots/length_vs_score.png", width = w, height = h, res = resolution)
 plot(data$length, data$score,
-    main="Siirtojen määrä vs Pisteet",
-    ylab="Pisteet",
-    xlab="Siirtojen määrä"
+    main = "Siirtojen määrä vs Pisteet",
+    ylab = "Pisteet",
+    xlab = "Siirtojen määrä"
 )
 abline(lm(data$score ~ data$length), col = "blue", lwd = 2)
+message("length_vs_score.png rendered!")
 
 
-# Get the distribution of moves in each direction
-data_move_distr <- as.data.frame(table(game_moves$direction) / nrow(game_moves))
-
-png('r_plots/general_move_distribution.png',width=w,height=h,res=resolution)
+png("r_plots/general_move_distribution.png", width = w, height = h, res = resolution)
+data_move_distr <- as.data.frame(table(factor(actual_moves$direction, labels = cat_order)))
 barplot(
-    names=data_move_distr$Var1,
-    height=data_move_distr$Freq,
-    main="Siirtojen yleinen jakauma",
-    xlab="Siirto",
-    col=rainbow(4)
+    names.arg = data_move_distr$Var1,
+    height = data_move_distr$Freq,
+    main = "Siirtojen yleinen jakauma",
+    xlab = "Siirto",
+    col = rainbow(4)
 )
+message("general_move_distribution.png rendered!")
 
-png('r_plots/first_move_distribution.png',width=w,height=h,res=resolution)
-jakauma_tiedot <- as.data.frame(table(first_moves$direction) / nrow(first_moves))
-jakauma_tiedot <- jakauma_tiedot[order(factor(jakauma_tiedot$Var1, levels = cat_order)),]
-head(jakauma_tiedot)
-eka_jakauma <- factor(first_moves$direction, levels = cat_order)
+png("r_plots/first_move_distribution.png", width = w, height = h, res = resolution)
+
+# Get the distribution of first moves in each direction
+first_move_distr <- as.data.frame(table(factor(first_moves$direction, labels = cat_order)))
 barplot(
-    names=data_move_distr$Suunta,
-    height=jakauma_tiedot$Freq,
-    main="Ensimmäisen siirron jakauma",
-    xlab="Ensimmäinen siirto",
-    col=rainbow(4)
+    names.arg = first_move_distr$Var1,
+    height = first_move_distr$Freq,
+    main = "Ensimmäisen siirron jakauma",
+    xlab = "Ensimmäinen siirto",
+    col = rainbow(4)
 )
+message("first_move_distribution.png rendered!")
 
-png('r_plots/first_move_vs_score.png',width=w*2,height=h,res=resolution)
-plot(eka_jakauma, data$score,
-    main="Ensimmäinen siirto vs pisteet",
-    ylab="Pisteet",
-    xlab="Ensimmäinen siirto",
-    ylim=c(0,20000),
-    col=rainbow(4)
+png("r_plots/first_move_vs_score.png", width = w, height = h, res = resolution)
+# Merge first_moves with validations
+first_move_scores <- merge(first_moves, validations, by.x = "game_hash", by.y = "game_hash")
+first_move_scores$direction <- factor(first_move_scores$direction, labels = cat_order)
+
+# Calculate average score for each direction
+average_scores <- aggregate(score ~ direction, data = first_move_scores, mean)
+
+# Create bar plot
+barplot(
+    names = average_scores$direction,
+    height = average_scores$score,
+    main = "Ensimmäinen siirto vs Pisteet",
+    xlab = "Ensimmäinen siirto",
+    ylab = "Pisteet",
+    col = rainbow(nrow(average_scores))
 )
+message("first_move_vs_score.png rendered!")
 
-png('r_plots/first_move_vs_score_table.png',width=w,height=h,res=resolution)
-# Create a, b, c, d variables
-b <- data_move_score$Suunta
-e <- data_move_score$Pisteet_avg
-# Join the variables to create a data frame
-df <- data.frame(b,e)
-names(df) <- c('Ensimmäinen siirto', 'Pisteiden keskiarvo')
-grid.table(df)
 
-png('r_plots/last_move_distribution.png',width=w,height=h,res=resolution)
-plot(factor(data$move_last, levels=cat_order),
-    main="Viimeisen siirron jakauma",
-    xlab="Viimeinen siirto",
-    col=rainbow(4)
+png("r_plots/last_move_distribution.png", width = w, height = h, res = resolution)
+last_move_distr <- as.data.frame(table(factor(last_moves$direction, labels = cat_order)))
+barplot(
+    names.arg = last_move_distr$Var1,
+    height = last_move_distr$Freq,
+    main = "Viimeisen siirron jakauma",
+    xlab = "Viimeinen siirto",
+    col = rainbow(4)
 )
+message("last_move_distribution.png rendered!")
 
-png('r_plots/last_move_vs_score.png',width=w,height=h,res=resolution)
-plot(factor(data$move_last), data$score,
-    main="Viimeinen siirto vs pisteet",
-    ylab="Pisteet",
-    xlab="Viimeinen siirto",
-    col=rainbow(4)
+png("r_plots/last_move_vs_score.png", width = w, height = h, res = resolution)
+# Merge last_moves with validations
+last_move_scores <- merge(last_moves, validations, by.x = "game_hash", by.y = "game_hash")
+last_move_scores$direction <- factor(last_move_scores$direction, labels = cat_order)
+
+# Calculate average score for each direction
+average_scores <- aggregate(score ~ direction, data = last_move_scores, mean)
+
+# Create bar plot
+barplot(
+    names = average_scores$direction,
+    height = average_scores$score,
+    main = "Viimeinen siirto vs Pisteet",
+    xlab = "Viimeinen siirto",
+    ylab = "Pisteet",
+    col = rainbow(nrow(average_scores))
 )
+message("last_move_vs_score.png rendered!")
 
-png('r_plots/first_vs_last_move.png',width=w,height=h,res=resolution)
-plot(factor(data$move_first), factor(data$move_last),
-    main="Ensimmäinen vs viimeinen siirto",
-    xlab="Ensimmäinen siirto",
-    ylab="Viimeinen siirto",
-    col=rainbow(4)
+png("r_plots/first_vs_last_move.png", width = w, height = h, res = resolution)
+# Merge first_moves and last_moves
+combined_moves <- merge(first_moves, last_moves, by = "game_hash")
+combined_moves$direction.x <- factor(combined_moves$direction.x, labels = cat_order)
+combined_moves$direction.y <- factor(combined_moves$direction.y, labels = cat_order)
+
+# Create a contingency table for the first and last moves
+move_combinations <- table(combined_moves$direction.x, combined_moves$direction.y)
+
+# Create a mosaic plot
+mosaicplot(
+    move_combinations,
+    main = "Ensimmäinen siirto vs Viimeinen siirto",
+    xlab = "Ensimmäinen siirto",
+    ylab = "Viimeinen siirto",
+    col = rainbow(length(move_combinations))
 )
+message("first_vs_last_move.png rendered!")
 
-# library("lubridate")
-# png('r_plots/hour_distribution.png',width=w,height=h,res=resolution)
-# datetime <- as_datetime((data$time/1000) + 3600*2)
-# hist(hour(datetime),
-#     main="Meneillään olevan tunnin jakauma pelin loppuessa",
-#     xlab="Tunti (max 24)",
-#     breaks=seq(0,24,1),
-#     xaxp=c(0,24,24),
-#     col=rainbow(24),
-#     prob = FALSE
-# )
-
-# png('r_plots/hour_vs_score.png',width=w,height=h,res=resolution)
-# datetime <- as_datetime((data$time/1000) + 3600*2)
-# plot(factor(hour(datetime)),
-#     data$score,
-#     main="Tunti vs pisteet",
-#     xlab="Tunti (max 24)",
-#     ylab="Pisteet",
-#     breaks=seq(0,24,1),
-#     xaxp=c(0,24,24),
-#     col=rainbow(24)
-# )
-
-
-# png('r_plots/weekday_distribution.png',width=w,height=h,res=resolution)
-# days_ordered <- factor(
-#     weekdays(datetime),
-#     levels=c("maanantai", "tiistai", "keskiviikko", "torstai", "perjantai", "lauantai","sunnuntai")
-# )
-# levels(days_ordered)[levels(days_ordered)=="maanantai"] <- "MA"
-# levels(days_ordered)[levels(days_ordered)=="tiistai"] <- "TI"
-# levels(days_ordered)[levels(days_ordered)=="keskiviikko"] <- "KE"
-# levels(days_ordered)[levels(days_ordered)=="torstai"] <- "TO"
-# levels(days_ordered)[levels(days_ordered)=="perjantai"] <- "PE"
-# levels(days_ordered)[levels(days_ordered)=="lauantai"] <- "LA"
-# levels(days_ordered)[levels(days_ordered)=="sunnuntai"] <- "SU"
-# plot(
-#     days_ordered,
-#     data$score,
-#     main="Viikonpäivä vs Pisteet",
-#     xlab="Viikonpäivä",
-#     ylab="Pisteet",
-#     col=rainbow(7),
-# )
-
-# png('r_plots/moves_river.png', width = 20, height = 10,width=w,height=h,res=resolution)
-# library(riverplot)
-# #
-# edges = data_moves
-# #
-# nodes = data.frame(ID = unique(c(edges$N1, edges$N2)), stringsAsFactors = FALSE)
-# nodes$x = as.integer(substr(nodes$ID, 2, 3))
-# nodes$y = as.integer(sapply(substr(nodes$ID, 1, 1), charToRaw)) - 65
-# rownames(nodes) = nodes$ID
-# #
-# library(RColorBrewer)
-# #
-# palette = paste0(brewer.pal(4, "Set1"), "60")
-# #
-# styles = lapply(nodes$y, function(n) {
-#   list(col = palette[n+1], lty = 0, textcol = "black")
-# })
-# names(styles) = nodes$ID
-
-# rp <- makeRiver(nodes, edges) #, styles=styles
-
-# message("Rendering riverplot...")
-# plot(rp, plot_area = .95, yscale=0.06,
-#     main="First n moves",
-#     xlab="A = UP, B = RIGHT, C = DOWN, D = LEFT"
-# )
 
 message("Rendering cover slide...")
-png('r_plots/cover.png',width=w,height=h,res=resolution)
+png("r_plots/cover.png", width = w, height = h, res = resolution)
 par(mar = c(0, 0, 0, 0))
-plot(x = 0:10, y = 0:10, ann = F,bty = "n",type = "n",
-     xaxt = "n", yaxt = "n")
-text(x = 5,y = 5, paste("Oispa Halla\nn = ", nrow(data)))
+plot(
+    x = 0:10, y = 0:10, ann = F, bty = "n", type = "n",
+    xaxt = "n", yaxt = "n"
+)
+text(x = 5, y = 5, paste("Oispa Halla\nn = ", nrow(data)))
 
-# message("Rendering cover slide 2...")
-# png('r_plots/cover2.png',width=w,height=h,res=resolution)
-# # Create a, b, c, d variables
-# b <- c('kaikki pelit', 'ei-hylätyt', 'hylätyt')
-# d <- c(mean(data$score), mean(data_completed$score), mean(data_abandoned$score))
-# f <- c(median(data$score), median(data_completed$score), median(data_abandoned$score))
-# # Laske moodi tämän postauksen mukaan: https://stackoverflow.com/a/2547551
-# g <- c(names(sort(-table(data$score)))[1], names(sort(-table(data_completed$score)))[1], names(sort(-table(data_abandoned$score)))[1])
-# # Join the variables to create a data frame
-# df <- data.frame(b,d,f,g)
-# names(df) <- c('', 'pisteiden keskiarvo', 'pisteiden mediaani', 'pisteiden moodi')
-# grid.table(df)
+message("cover.png rendered!")
 
-# message("Rendering cover slide 3...")
-# png('r_plots/cover3.png',width=w,height=h,res=resolution)
-# # Create a, b, c, d variables
-# b <- c('kaikki pelit', 'ei-hylätyt', 'hylätyt')
-# d <- c(mean(data$game_length), mean(data_completed$game_length), mean(data_abandoned$game_length))
-# f <- c(median(data$game_length), median(data_completed$game_length), median(data_abandoned$game_length))
-# g <- c(names(sort(-table(data$game_length)))[1], names(sort(-table(data_completed$game_length)))[1], names(sort(-table(data_abandoned$game_length)))[1])
-# # Join the variables to create a data frame
-# df <- data.frame(b,d,f,g)
-# names(df) <- c('', 'pelin pituuden keskiarvo', 'pelin pituuden mediaani', 'pelin pituuden moodi')
-# grid.table(df)
+library(ggplot2)
+
+png("r_plots/paths.png", width = w, height = h, res = resolution)
+library(ggplot2)
+
+# Assuming 'moves' is your data frame with columns 'game_hash', 'move_index', and 'direction'
+
+# Function to convert direction to coordinates change
+get_coord_change <- function(direction) {
+    switch(as.character(direction),
+        "0" = c(0, 1), # Up
+        "1" = c(1, 0), # Right
+        "2" = c(0, -1), # Down
+        "3" = c(-1, 0) # Left
+    )
+}
+
+# Function to accumulate coordinates
+accumulate_coords <- function(moves) {
+    coords <- matrix(c(0, 0), nrow = 1, ncol = 2)
+    for (i in 1:nrow(moves)) {
+        change <- get_coord_change(moves$direction[i])
+        coords <- rbind(coords, coords[nrow(coords), ] + change)
+    }
+    return(coords[-1, , drop = FALSE]) # Remove the starting point
+}
+
+# Split the data by game and accumulate coordinates
+paths <- do.call(rbind, lapply(split(moves, moves$game_hash), accumulate_coords))
+
+# Create a data frame for the paths
+path_points <- as.data.frame(paths)
+colnames(path_points) <- c("x", "y")
+
+# Count the frequency of each coordinate
+path_points$freq <- ave(rep(1, nrow(path_points)), path_points$x, path_points$y, FUN = sum)
+
+# Plotting
+ggplot(path_points, aes(x = x, y = y)) +
+    geom_tile(aes(fill = freq), color = NA) +
+    scale_fill_gradient(low = "blue", high = "red") +
+    labs(title = "Game Move Heatmap", x = "X Coordinate", y = "Y Coordinate") +
+    theme_minimal()
+
+
 
 message("Kaikki valmista!")

@@ -3,6 +3,7 @@ use futures_util::StreamExt;
 use std::{collections::HashMap, io::Write, process::exit};
 use tokio::task::JoinHandle;
 use twothousand_forty_eight::unified::reconstruction::Reconstructable;
+use twothousand_forty_eight::v1::validator::validate_first_move;
 
 use crate::libproxy::{get_gamestate, get_moves, parse_data, reconstruct_history};
 use crate::Game;
@@ -310,14 +311,28 @@ pub async fn unpack_games(pool: SqlitePool) {
         if i % 100 == 0 {
             println!("Processing game {i}: {}", &hash);
         }
+        if sqlx::query!(
+            "SELECT game_hash FROM validations WHERE game_hash = ?",
+            hash
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap()
+        .is_some()
+        {
+            //println!("\tAlready processed, skipping...");
+            i += 1;
+            continue;
+        }
         let data = row.data_raw;
         //println!("\tParsing data...");
         let parsed = parse_data(data).expect("Failed to parse data");
         let moves = get_moves(&parsed);
         //println!("\tReconstructing history...");
+
         let history = match parsed {
-            ParseResult::V1(v1) => v1.reconstruct().unwrap(),
-            ParseResult::V2(v2) => v2.reconstruct().unwrap(),
+            ParseResult::V1(v1) => v1.reconstruct().expect("Failed to reconstruct history"),
+            ParseResult::V2(v2) => v2.reconstruct().expect("Failed to reconstruct history"),
         };
         let pool = pool.clone();
 

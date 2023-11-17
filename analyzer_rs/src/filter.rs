@@ -1,16 +1,14 @@
 use crate::Game;
 use rayon::prelude::*;
+use twothousand_forty_eight::unified::validate;
 
 use crate::{io, libproxy::reconstruct_history};
 
 pub fn filter(data: Vec<Game>, allow_abandoned: bool, only_abandoned: bool) -> Vec<Game> {
-    /*
     data.par_iter()
-        .filter(|g| reconstruct_history(g.data_raw.clone()).is_ok())
+        .filter(|g| validate(&g.data_raw).is_ok())
         .cloned()
         .collect::<Vec<_>>()
-        */
-    data
 }
 
 pub fn get_filtered_data() -> Vec<Game> {
