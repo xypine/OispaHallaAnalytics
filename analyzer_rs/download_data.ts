@@ -45,12 +45,25 @@ async function write_games(games: Game[]) {
   console.log(`Writing ${games.length} games to disk`);
   const filename = getFilename();
   const encoder = new TextEncoder();
-  const data = encoder.encode(
-    JSON.stringify({
-      data: games,
-    })
-  );
-  await Deno.writeFile(filename, data);
+  // JSON.stringify won't work for strings over ~500mb, so we have to construct the json by hand
+  console.log("Serializing into JSON & writing...");
+  const file = await Deno.create(filename);
+  const writer = file.writable.getWriter();
+  await writer.write(encoder.encode(`{"data": [`));
+  const comma = encoder.encode(",");
+
+  let is_first = true;
+  for(const game of games) {
+    if(!is_first) {
+      await writer.write(comma);
+    }
+    const game_json = JSON.stringify(game);
+    const encoded = encoder.encode(game_json);
+    await writer.write(encoded);
+    is_first = false;
+  }
+
+  await writer.write(new TextEncoder().encode(`]}`));
 }
 
 async function sleep(ms: number) {
